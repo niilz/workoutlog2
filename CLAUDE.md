@@ -1,158 +1,53 @@
-# WorkoutLog2 — Design System & Figma Integration Rules
+# CLAUDE.md
 
-## Project Overview
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Stack:** Kotlin Multiplatform (KMP) + Compose Multiplatform
-**Targets:** Android, iOS
-**Package:** `de.niilz.kmp.workoutlog2`
-**Build:** Gradle with Kotlin DSL, version catalog at `gradle/libs.versions.toml`
+## Build Commands
 
----
+```bash
+# Build Android debug APK
+./gradlew :androidApp:assembleDebug
 
-## Project Structure
+# Run shared KMP unit tests
+./gradlew :composeApp:allTests
+
+# Run Android unit tests
+./gradlew :androidApp:test
+
+# Run Android instrumented tests (requires connected device/emulator)
+./gradlew :androidApp:connectedAndroidTest
+```
+
+iOS: open `iosApp/` directory in Xcode and run from there.
+
+## Architecture
+
+The project is split into two Gradle modules:
+
+- **`:composeApp`** — Kotlin Multiplatform library (`com.android.kotlin.multiplatform.library` plugin). Contains all shared UI and business logic. Targets `androidLibrary`, `iosArm64`, and `iosSimulatorArm64`. The root composable is `App()` in `commonMain`.
+
+- **`:androidApp`** — Standard Android application (`com.android.application`). Has no logic of its own — it depends on `:composeApp` and calls `App()` from its `MainActivity`. All Android launcher icons and the manifest live here.
+
+Platform-specific code in `:composeApp` uses Kotlin's `expect`/`actual` pattern (see `Platform.kt` in each source set).
+
+### Source Sets in `:composeApp`
 
 ```
 composeApp/src/
-├── commonMain/kotlin/de/niilz/kmp/workoutlog2/   # Shared Compose UI + logic
-├── commonMain/composeResources/drawable/          # Shared vector/image assets
-├── androidMain/kotlin/…/                          # Android entry point (MainActivity.kt)
-├── iosMain/kotlin/…/                              # iOS entry point (MainViewController.kt)
-└── androidMain/res/                               # Android-only resources (launcher icons)
+├── commonMain/   # Shared UI (App.kt) and logic
+├── androidMain/  # Android actuals
+└── iosMain/      # iOS actuals
 ```
 
-Key files:
-- `composeApp/src/commonMain/kotlin/de/niilz/kmp/workoutlog2/App.kt` — root composable
-- `gradle/libs.versions.toml` — dependency version catalog
-
----
-
-## Design System (Current State)
-
-The project currently has **no custom design system** — it relies entirely on Material 3 defaults. When integrating Figma designs, create the following files under `commonMain/kotlin/de/niilz/kmp/workoutlog2/ui/theme/`:
-
-### Recommended File Structure
-```
-ui/theme/
-├── Color.kt       # Brand + semantic color definitions
-├── Type.kt        # Typography scale
-├── Theme.kt       # MaterialTheme wrapper with custom colors/type
-└── Spacing.kt     # (optional) spacing/dimension tokens
-```
-
-### Color Tokens
-Define colors in `Color.kt` as `val` properties:
+Shared image/vector assets go in `commonMain/composeResources/drawable/` and are accessed via the generated `Res` class:
 ```kotlin
-val PrimaryColor = Color(0xFF6075F2)
-val SecondaryColor = Color(0xFF6B57FF)
-// ...
-```
-Reference via `MaterialTheme.colorScheme.*` in composables.
-
-### Typography
-Use `TextStyle` with `sp` units. Wrap in `Typography()` passed to `MaterialTheme`.
-
-### Spacing
-Use `Dp` values. Define a `Spacing` object or compositionLocal for consistent margins/padding.
-
-### Current Material 3 Version
-`material3 = "1.10.0-alpha05"` (Compose Multiplatform flavor from `org.jetbrains.compose.material3`)
-
----
-
-## Styling Approach
-
-- **No CSS/Sass** — all styling is done via Compose Modifiers and MaterialTheme
-- Backgrounds: `Modifier.background(MaterialTheme.colorScheme.primaryContainer)`
-- Safe areas: `Modifier.safeContentPadding()` (required for iOS notch/home bar)
-- Layout sizing: `Modifier.fillMaxSize()`, `Modifier.fillMaxWidth()`
-- No custom CSS methodologies apply — use Compose's declarative modifier chain
-
----
-
-## Component Patterns
-
-### Composable conventions
-- Annotate root composables with both `@Composable` and `@Preview`
-- State: `var x by remember { mutableStateOf(...) }`
-- Platform differences: use `expect`/`actual` pattern (see `Platform.kt`)
-
-### Example component shape
-```kotlin
-@Composable
-fun MyComponent(modifier: Modifier = Modifier) {
-    MaterialTheme {
-        Column(modifier = modifier.fillMaxSize()) {
-            // content
-        }
-    }
-}
+painterResource(Res.drawable.my_asset)
 ```
 
----
+### Theming
 
-## Asset Management
+No custom design system exists yet — the app uses Material 3 defaults via `MaterialTheme { }`. To add custom theming, create `ui/theme/Color.kt`, `Type.kt`, and `Theme.kt` under `commonMain`.
 
-### Shared resources (preferred for Figma-exported assets)
-- **Location:** `composeApp/src/commonMain/composeResources/drawable/`
-- **Format:** XML vector drawables (`.xml`) or PNG/WebP
-- **Access:**
-  ```kotlin
-  import workoutlog2.composeapp.generated.resources.Res
-  import workoutlog2.composeapp.generated.resources.my_icon
+### Dependency Management
 
-  Image(painterResource(Res.drawable.my_icon), contentDescription = null)
-  ```
-- The `Res` class is auto-generated by the Compose Resources plugin at build time.
-
-### Android-only resources
-- `composeApp/src/androidMain/res/` — launcher icons, adaptive icons, `strings.xml`
-- Access via standard Android `R` class
-
-### Naming convention
-- Use `snake_case` for all drawable file names (e.g., `ic_dumbbell.xml`, `bg_workout_card.png`)
-
----
-
-## Icon System
-
-- **Current icons:** XML Vector Drawables in `commonMain/composeResources/drawable/`
-- **Usage:** `painterResource(Res.drawable.icon_name)`
-- **Naming:** prefix icons with `ic_` (e.g., `ic_add.xml`, `ic_timer.xml`)
-- **Recommended:** use Material Icons from `compose-material-icons-extended` if adding icon dependency, or export SVG from Figma → convert to Android Vector Drawable
-
----
-
-## Figma → Code Workflow
-
-1. **Get design context** via `get_design_context` with the Figma node/file key.
-2. The tool returns React+Tailwind reference code — **translate to Kotlin Compose**:
-   - `div` / `flex` → `Box` / `Row` / `Column`
-   - CSS colors → `Color(0xFFRRGGBB)` or `MaterialTheme.colorScheme.*`
-   - `px` sizes → `dp` / `sp` values
-   - CSS classes → Modifier chains
-3. Export image/vector assets from Figma as SVG, convert to Android Vector Drawable (`.xml`), place in `commonMain/composeResources/drawable/`.
-4. Define new colors and type styles in `ui/theme/Color.kt` / `ui/theme/Type.kt` rather than hardcoding them inline.
-5. Wrap new screens/components in `MaterialTheme { }` or rely on the root `App()` wrapper.
-
----
-
-## Platform Entry Points
-
-| Platform | Entry Point |
-|----------|------------|
-| Android | `androidMain/.../MainActivity.kt` → `setContent { App() }` |
-| iOS | `iosMain/.../MainViewController.kt` → `ComposeUIViewController { App() }` |
-| iOS SwiftUI | `iosApp/iosApp/ContentView.swift` wraps `MainViewController` |
-
----
-
-## Dependencies (Core)
-
-| Library | Version |
-|---------|---------|
-| Kotlin | 2.3.0 |
-| Compose Multiplatform | 1.10.0 |
-| Material 3 | 1.10.0-alpha05 |
-| Lifecycle ViewModel Compose | 2.9.6 |
-| Activity Compose | 1.12.2 |
-| AGP | 8.11.2 |
+All versions are centralized in `gradle/libs.versions.toml`. Add new dependencies there and reference them via `libs.*` in build files.
